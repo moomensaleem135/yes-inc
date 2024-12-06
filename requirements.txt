@@ -1,0 +1,10 @@
+Flask
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-Login
+psycopg2
+google-api-python-client
+google-auth
+flask-swagger-ui
+flasgger
+hubspot-api-client  == 8.0.0
