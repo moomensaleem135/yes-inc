@@ -28,5 +28,18 @@ def create_app():
 
     @app.route('/')
     def home():
-        return redirect(url_for('flasgger.apidocs'))
+        """
+        Home route displaying links to API documentation and HubSpot access token authorization.
+        """
+        return """
+          <h1>HubSpot Integration App</h1>
+          <p>
+              For HubSpot access token, visit: 
+              <a href="http://localhost:5000/hubspot/auth" target="_blank">http://localhost:5000/hubspot/auth</a>
+          </p>
+          <p>
+              For API docs, visit: 
+              <a href="http://localhost:5000/apidocs/" target="_blank">http://localhost:5000/apidocs/</a>
+          </p>
+          """
     return app

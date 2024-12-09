@@ -1,13 +1,12 @@
-from flask import Blueprint, request, jsonify, make_response, redirect
+from flask import Blueprint, request, jsonify, redirect, current_app
 from app import db
-from app.models import User, Lead
+from app.models import User, Lead, AccessToken
 from flasgger import swag_from
-from hubspot.crm.contacts import ApiException
 from hubspot import HubSpot
 from app.swagger_docs import hubspot
-import requests
 import urllib.parse
-
+from datetime import datetime, timedelta
+from app.utils import *
 webhook_bp = Blueprint('auth', __name__)
 
 client = HubSpot()
@@ -20,93 +19,67 @@ def webhook_handler():
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data received"}), 400
-
-        print(f"Webhook received: {data}")
-
-        # Extract objectId (contact ID)
         contact_id = data[0].get('objectId')
         if not contact_id:
             return jsonify({"error": "No objectId found"}), 400
+        company_details, error = get_hubspot_company_details(contact_id)
+        if error:
+            return jsonify({"error": "Failed to fetch company details", "details": error}), 500
+        company_name = company_details["properties"].get("name", "N/A")
+        domain = company_details["properties"].get("domain", "N/A")
+        sheet_data, error = get_google_sheet_data()
+        if error:
+            return jsonify({"error": "Failed to fetch data from Google Sheets", "details": error}), 500
+        for row in sheet_data:
+            company_name_in_sheet = row[3]
+            if company_name.lower() == company_name_in_sheet.lower():
+                existing_lead = Lead.query.filter_by(company_name=company_name).first()
+                if existing_lead:
+                    print(f"Skipping: Company {company_name} already exists in the database.")
+                else:
+                    adviser_name = row[0]
+                    lead_name = row[1]
+                    linkedin_url = row[2]
+                    lead_title = row[4]
+                    new_lead = Lead(
+                        adviser_name=adviser_name,
+                        lead_name=lead_name,
+                        linkedin_url=linkedin_url,
+                        lead_title=lead_title,
+                        company_name=company_name,
+                        domain=domain
+                    )
+                    try:
+                        db.session.add(new_lead)
+                        db.session.commit()
+                        return jsonify(
+                            {"message": f"Lead for '{company_name}' has been saved to the database."}), 200
+                    except Exception as e:
+                        db.session.rollback()
+                        print(e)
+                        return jsonify({"error": f"Failed to save lead: {str(e)}"}), 500
 
-        # Fetch contact details using the HubSpot API
-        print("object Id", contact_id)
-
-        url = f"https://api.hubapi.com/crm/v3/objects/contacts/{contact_id}/associations/companies"
-        headers = {
-            "Authorization": f"Bearer {ACCESS_TOKEN}"}
-        print(url, headers)
-        response = requests.get(url, headers=headers)
-
-        if response.status_code != 200:
-            return jsonify({"error": "Failed to fetch contact details", "details": response.text}), 500
-        association_details = response.json()
-        print(association_details)
-        if association_details.get("results"):
-            company_id = association_details["results"][0].get("id")
-            print(f"Association ID: {company_id}")
-            if company_id:
-                url = f"https://api.hubapi.com/crm/v3/objects/companies/{company_id}"
-                headers = {
-                    "Authorization": f"Bearer {ACCESS_TOKEN}"}
-                response = requests.get(url, headers=headers)
-
-                if response.status_code != 200:
-                    return jsonify({"error": "Failed to fetch contact details", "details": response.text}), 500
-                company_details = response.json()
-                company_name = company_details["properties"].get("name", "N/A")
-                domain = company_details["properties"].get("domain", "N/A")
-                print("company_name", company_name)
-                api_key = GOOGLE_SHEETS_API_KEY
-                spreadsheet_id = SPREADSHEET_ID
-                url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{SPREADSHEET_SHEET_NAME}?key={api_key}"
-                sheet_response = requests.get(url)
-                if sheet_response.status_code != 200:
-                    return jsonify(
-                        {"error": "Failed to fetch data from Google Sheets", "details": sheet_response.text}), 500
-                sheet_data = sheet_response.json()
-                for row in sheet_data.get("values", []):
-                    print("row", row)
-                    company_name_in_sheet = row[3]
-                    if company_name.lower() == company_name_in_sheet.lower():
-                        adviser_name = row[0]
-                        lead_name = row[1]
-                        linkedin_url = row[2]
-                        lead_title = row[4]
-                        new_lead = Lead(
-                            adviser_name=adviser_name,
-                            lead_name=lead_name,
-                            linkedin_url=linkedin_url,
-                            lead_title=lead_title,
-                            company_name=company_name,
-                            domain=domain
-                        )
-                        try:
-                            db.session.add(new_lead)
-                            db.session.commit()
-                            return jsonify(
-                                {"message": f"Lead for '{company_name}' has been saved to the database."}), 200
-                        except Exception as e:
-                            db.session.rollback()  # Rollback in case of any error
-                            print(e)
-                            return jsonify({"error": f"Failed to save lead: {str(e)}"}), 500
-                    print("No matched company")
+        return jsonify({"message": "No matched company found in Google Sheets."}), 200
 
     except Exception as e:
-        print(e)
+        print("Error in webhook: ", e)
         return jsonify({"error": str(e)}), 400
 
 
 @webhook_bp.route('/hubspot/auth', methods=['GET'])
 @swag_from(hubspot)
 def authorize_and_exchange():
-    """Handle OAuth authorization and token exchange in one API."""
+    client_id = current_app.config['CLIENT_ID']
+    redirect_uri = current_app.config['REDIRECT_URI']
+    scope = current_app.config['SCOPE']
+    user_id = current_app.config['USER_ID']
 
     # Step 1: Redirect user to HubSpot OAuth authorization URL
-    hubspot_url = f"https://app.hubspot.com/oauth/{USER_ID}/authorize"
+    hubspot_url = f"https://app.hubspot.com/oauth/{user_id}/authorize"
     params = {
-        'client_id': CLIENT_ID,
-        'redirect_uri': REDIRECT_URI,
-        'scope': SCOPE,
+        'client_id': client_id,
+        'redirect_uri': redirect_uri,
+        'scope': scope,
         'response_type': 'code',
     }
 
@@ -120,34 +93,28 @@ def authorize_and_exchange():
 def callback():
     """Handle HubSpot OAuth callback and exchange authorization code for access token."""
     code = request.args.get('code')
-    user_id = request.args.get('user_id')  # Get the user_id passed earlier
+    user_id = request.args.get('user_id')
 
     if not code:
         return jsonify({"error": "No authorization code provided."}), 400
 
-    # Step 2: Exchange the authorization code for an access token
     token_url = "https://api.hubapi.com/oauth/v1/token"
     data = {
         'grant_type': 'authorization_code',
-        'client_id': CLIENT_ID,
-        'client_secret': CLIENT_SECRET,
-        'redirect_uri': REDIRECT_URI,
+        'client_id': current_app.config['CLIENT_ID'],
+        'client_secret': current_app.config['CLIENT_SECRET'],
+        'redirect_uri': current_app.config['REDIRECT_URI'],
         'code': code
     }
 
     try:
-        # Make the POST request to exchange the code for an access token
         response = requests.post(token_url, data=data)
         response_data = response.json()
 
         if response.status_code == 200:
             access_token = response_data.get('access_token')
-            # Save the access token to use in subsequent API requests, associated with the user_id
-            print(f"Access Token: {access_token}")
-
-            # You can now associate the token with the user in your database
-            # For example, save access_token to your database associated with user_id
-
+            expiration_time = (datetime.utcnow() + timedelta(minutes=10)).timestamp()
+            AccessToken.save_token(access_token, expiration_time)
             return jsonify({
                 "message": f"Authorization successful! Access token generated for user {user_id}.",
                 "access_token": access_token
