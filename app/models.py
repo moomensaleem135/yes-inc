@@ -1,6 +1,8 @@
-from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
+from typing import Any, Dict
 
+from flask_login import UserMixin
+from psycopg2 import IntegrityError
+from werkzeug.security import generate_password_hash, check_password_hash
 from app.database import db
 
 
@@ -18,6 +20,35 @@ class User(db.Model, UserMixin):
 
     def check_password(self, password):
         return check_password_hash(password=self.password, pwhash='')
+
+    @classmethod
+    def create_user(cls, email: str, password: str):
+        """
+        Create a new user.
+        """
+        if cls.query.filter_by(email=email).first():
+            return {"error": "User already exists"}, 400
+        try:
+            new_user = cls(email=email, password=password)
+            db.session.add(new_user)
+            db.session.commit()
+            return {"message": "User created successfully"}, 201
+        except IntegrityError as e:
+            db.session.rollback()
+            return {"error": "Database integrity error", "details": str(e.orig)}, 400
+        except Exception as e:
+            db.session.rollback()
+            return {"error": "Database error", "details": str(e)}, 500
+
+    @classmethod
+    def authenticate(cls, email: str, password: str) -> Any:
+        """
+        Authenticate a user.
+        """
+        user = cls.query.filter_by(email=email).first()
+        if user and user.password == password:  # Replace with user.verify_password(password) for hashed passwords
+            return user
+        return None
 
 
 class HubspotToken(db.Model):

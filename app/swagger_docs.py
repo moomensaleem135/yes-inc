@@ -71,9 +71,5 @@ log_in_docs = {
 
 hubspot = {
     'tags': ['Hubspot urls'],
-    'description': 'User login',
-    'responses': {
-        '201': {'description': 'User created successfully'},
-        '400': {'description': 'User already exists or invalid input'}
-    }
+    'description': 'Hubspot auth and callback',
 }

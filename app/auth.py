@@ -1,16 +1,13 @@
-from typing import Dict, Any
-
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request
 from flask_login import login_user
-from app import db
 from app.models import User, Lead
 from flasgger import swag_from
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import BadRequest
-from app.swagger_docs import sign_up_docs, log_in_docs, hubspot
+from app.swagger_docs import sign_up_docs, log_in_docs
+from app.utils import create_response, logger
 
 auth_bp = Blueprint('auth', __name__)
-HUBSPOT_API_KEY = '52f67ccd-5bbb-43b6-98d7-bcdf03f9cb99'
 
 
 @auth_bp.route('/sign-up/', methods=['POST'])
@@ -19,52 +16,64 @@ def sign_up():
     try:
         data = request.get_json()
         if not data:
+            logger.error("Invalid JSON format received during sign-up request.")
             raise BadRequest("Invalid JSON format")
+
         email = data.get('email')
         password = data.get('password')
+
         if not email or not password:
-            return jsonify({"message": "Email and password are required"}), 400
-        user = User.query.filter_by(email=email).first()
-        if user:
-            return jsonify({"message": "User already exists"}), 400
-        new_user = User()
-        new_user.email = email
-        new_user.password = password
-        db.session.add(new_user)
-        db.session.commit()
-        return jsonify({"message": "User created successfully"}), 201
+            logger.warning("Sign-up attempt with missing email or password.")
+            return create_response(
+                error={"email": "Email is required", "password": "Password is required"},
+                status_code=400
+            )
+
+        response, status_code = User.create_user(email=email, password=password)
+
+        logger.info(f"User created successfully: {email}")
+        return create_response(data=response, status_code=status_code)
+
     except BadRequest as e:
-        return jsonify({"error": str(e)}), 400
-    except IntegrityError as e:
-        db.session.rollback()
-        return jsonify({"error": "Database integrity error", "details": str(e.orig)}), 400
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        return jsonify({"error": "Database error", "details": str(e)}), 500
+        logger.error(f"Bad request error: {e}")
+        return create_response(error={"message": str(e)}, status_code=400)
     except Exception as e:
-        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+        logger.error(f"Error in sign-up: {e}")
+        return create_response(error={"message": "Internal server error", "details": str(e)}, status_code=500)
 
 
 @auth_bp.route('/login', methods=['POST'])
 @swag_from(log_in_docs)
-def login() -> Any:
+def login():
     try:
-
-        data: Dict[str, str] = request.get_json()
+        data = request.get_json()
         if not data:
-            return jsonify({"error": "Invalid JSON format"}), 400
-        email: str = data.get('email', '').strip()
-        password: str = data.get('password', '').strip()
-        if not email or not password:
-            return jsonify({"error": "Email and password are required"}), 400
-        user = User.query.filter_by(email=email).first()
-        if user:  # and user.check_password(password):
-            login_user(user)
-            return jsonify({"message": "Login successful"}), 200
-        else:
-            return jsonify({"error": "Invalid email or password"}), 401
-    except SQLAlchemyError as e:
-        return jsonify({"error": "Database error", "details": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": "Something went wrong", "details": str(e)}), 400
+            logger.error("Invalid JSON format received during login attempt.")
+            return create_response(error="Invalid JSON format", status_code=400)
 
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+
+        if not email or not password:
+            logger.warning("Login attempt with missing email or password.")
+            return create_response(
+                error={"email": "Email is required", "password": "Password is required"},
+                status_code=400
+            )
+
+        user = User.authenticate(email=email, password=password)
+
+        if user:
+            login_user(user)
+            logger.info(f"Login successful for user: {email}")
+            return create_response(message="Login successful", status_code=200)
+
+        logger.warning(f"Failed login attempt for user: {email} (Invalid credentials)")
+        return create_response(error="Invalid email or password", status_code=401)
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error during login: {e}")
+        return create_response(error={"message": "Database error", "details": str(e)}, status_code=500)
+    except Exception as e:
+        logger.error(f"Unexpected error during login: {e}")
+        return create_response(error={"message": "Something went wrong", "details": str(e)}, status_code=500)
