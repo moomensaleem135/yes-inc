@@ -39,6 +39,7 @@ This project is designed to match leads from HubSpot to a user's Google Sheet. I
     SECRET_KEY=<your_secret_key>
     SQLALCHEMY_DATABASE_URI=<your_database_uri>
     SQLALCHEMY_TRACK_MODIFICATIONS=False
+   SECRET_KEY
     ```
 
     - Make sure to replace the placeholders `<...>` with your actual values.
