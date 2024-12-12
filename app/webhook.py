@@ -43,7 +43,8 @@ def webhook_handler():
         # Compare with Google Sheets and save lead if matched
         for row in sheet_data:
             company_name_in_sheet = row[3].lower() if row[3] else ""
-            if company_name == company_name_in_sheet:
+            if match_company_name(name_in_hubspot=company_name, name_in_sheet=company_name_in_sheet):
+                # if company_name == company_name_in_sheet:
                 if Lead.query.filter_by(company_name=company_name).first():
                     logger.info(f"Skipping: Company '{company_name}' already exists in the database.")
                 else:
@@ -52,10 +53,10 @@ def webhook_handler():
                         lead_name=row[1],
                         linkedin_url=row[2],
                         lead_title=row[4],
-                        company_name=company_name,
+                        company_name=row[3],
                         domain=domain
                     )
-                    logger.info(f"Lead for '{company_name}' has been saved to the database.")
+                    logger.info(f"Lead for '{ row[3]}' has been saved to the database.")
                     return create_response(message=f"Lead for '{company_name}' has been saved to the database.",
                                            status_code=200)
 

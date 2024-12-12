@@ -6,7 +6,7 @@ from app.models import AccessToken
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Tuple, Any
 import logging
-
+import re 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -188,3 +188,42 @@ def create_response(message: Optional[str] = None, data: Optional[Dict] = None, 
     # Remove keys with None values for cleaner responses
     response = {key: value for key, value in response.items() if value is not None}
     return jsonify(response), status_code
+
+
+def normalize_name(name: str) -> str:
+    """
+    Normalize company names by removing suffixes and converting to lowercase.
+    Removes abbreviations like Pvt Ltd, Inc, Corp, Company, etc.
+    """
+    name = name.lower()
+    # List of common company suffixes and abbreviations to remove
+    suffixes = r'\b(the|pvt ltd|private limited|llc|ltd|inc|corp|company|co|plc|group|enterprises|services|associates|international|solutions|consulting|industries|partners|studios|technologies|manufacturers)\b'
+    # Remove the suffixes and extra spaces
+    name = re.sub(suffixes, '', name)
+    # Remove any extra spaces left after removing the suffixes
+    name = re.sub(r'\s+', ' ', name).strip()
+    return name
+
+
+def match_company_name(name_in_hubspot: str, name_in_sheet: str) -> bool:
+    """
+    Match two company names with slight variations, focusing on the core name.
+    The function normalizes names and checks if they match closely from the left side.
+    """
+    normalized_hubspot_name = normalize_name(name_in_hubspot)
+    normalized_sheet_name = normalize_name(name_in_sheet)
+
+    # Split the normalized names into tokens (words)
+    hubspot_tokens = normalized_hubspot_name.split()
+    sheet_tokens = normalized_sheet_name.split()
+
+    # Check if the first tokens match, or if there is a substring match between the core tokens
+    if hubspot_tokens[0] == sheet_tokens[0]:
+        return True
+
+    # Additional logic for partial matches of words
+    for i in range(len(hubspot_tokens)):
+        if hubspot_tokens[i] in sheet_tokens:
+            return True
+
+    return False
