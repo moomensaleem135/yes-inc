@@ -69,13 +69,13 @@ class Lead(db.Model):
     linkedin_url = db.Column(db.String(255))
     lead_title = db.Column(db.String(255))
     company_name = db.Column(db.String(255))
-    domain = db.Column(db.String(255))
+    domain = db.Column(db.String(255), nullable=True)
 
     def __repr__(self):
         return f'<Lead {self.lead_title}>'
 
     @classmethod
-    def create_and_save(cls, adviser_name, lead_name, linkedin_url, lead_title, company_name, domain):
+    def create_and_save(cls, adviser_name, lead_name, linkedin_url, lead_title, company_name, domain=None):
         try:
             new_lead = cls(
                 adviser_name=adviser_name,
@@ -132,3 +132,41 @@ class AccessToken(db.Model):
         if token:
             db.session.delete(token)
             db.session.commit()
+
+
+class UserPipedriveToken(db.Model):
+    __tablename__ = 'user_pipedrive_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_email = db.Column(db.String(255), nullable=False, unique=True)  # Using email as a unique identifier
+    access_token = db.Column(db.Text, nullable=False)
+    expiration_time = db.Column(db.Float, nullable=False)
+    creator_id = db.Column(db.Integer, nullable=True)  # New field for storing the creator_id
+
+    def __repr__(self):
+        return f'<UserPipedriveToken Email {self.user_email}>'
+
+    @staticmethod
+    def get_token_by_email(user_email):
+        return UserPipedriveToken.query.filter_by(user_email=user_email).first()
+
+    @staticmethod
+    def save_token(user_email, access_token, expiration_time, creator_id=None):
+        existing_token = UserPipedriveToken.query.filter_by(user_email=user_email).first()
+        if existing_token:
+            existing_token.access_token = access_token
+            existing_token.expiration_time = expiration_time
+            existing_token.creator_id = creator_id  # Update the creator_id if available
+        else:
+            new_token = UserPipedriveToken(
+                user_email=user_email,
+                access_token=access_token,
+                expiration_time=expiration_time,
+                creator_id=creator_id  # Store the creator_id when creating a new record
+            )
+            db.session.add(new_token)
+        db.session.commit()
+
+    @staticmethod
+    def get_token_by_creator_id(creator_id):
+        return UserPipedriveToken.query.filter_by(creator_id=creator_id).first()

@@ -1,4 +1,4 @@
-from flask import Flask, redirect, url_for
+from flask import Flask, current_app, url_for
 from flask_login import LoginManager
 from flasgger import Swagger
 from flask_migrate import Migrate
@@ -7,6 +7,7 @@ from app.models import User
 from app.database import db
 from app.auth import auth_bp
 from app.webhook import webhook_bp
+from app.pipedrive import pipedrive_bp
 
 # Initialize Flask extensions
 login_manager = LoginManager()
@@ -37,22 +38,24 @@ def create_app(config_class=Config):
     # Register blueprints
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(webhook_bp)
+    app.register_blueprint(pipedrive_bp, url_prefix="/pipedrive")
 
     # Define routes
     @app.route('/')
     def home():
+        base_url = current_app.config["BASE_URL"]
         """
         Home route displaying links to API documentation and HubSpot access token authorization.
         """
-        return """
+        return f"""
               <h1>HubSpot Integration with Google Sheets to Match Leads</h1>
               <p>
                   To authenticate hubspot with the system, visit: 
-                  <a href="http://localhost:5000/hubspot/auth" target="_blank">http://localhost:5000/hubspot/auth</a>
+                  <a href="{base_url}/hubspot/auth" target="_blank">{current_app.config["BASE_URL"]}/hubspot/auth</a>
               </p>
               <p>
                   For the API documentation, visit: 
-                  <a href="http://localhost:5000/apidocs/" target="_blank">http://localhost:5000/apidocs/</a>
+                  <a href="{base_url}/apidocs/" target="_blank">{current_app.config["BASE_URL"]}/apidocs/</a>
               </p>
               """
 

@@ -6,7 +6,8 @@ from app.models import AccessToken
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Tuple, Any
 import logging
-import re 
+import re
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -47,7 +48,7 @@ def refresh_hubspot_token() -> None:
     Refreshes the HubSpot OAuth token by triggering the authorization flow.
     """
     try:
-        auth_url = "http://localhost:5000/hubspot/auth"
+        auth_url = f"{current_app.config['BASE_URL']}hubspot/auth"
         response = requests.get(auth_url, allow_redirects=True)
         if response.history:
             logger.info(f"Redirected {len(response.history)} times")
@@ -67,7 +68,7 @@ def refresh_hubspot_token() -> None:
     except requests.exceptions.RequestException as e:
         logger.error(f"Error refreshing HubSpot token: {e}")
         logger.error("Invalid or expired token. To get a fresh access token,"
-                     " click on this link: http://localhost:5000/hubspot/auth")
+                     f" click on this link: {current_app.config['BASE_URL']}/hubspot/auth")
 
 
 def get_hubspot_company_details(contact_id: str) -> Tuple[Optional[Dict], Optional[str]]:

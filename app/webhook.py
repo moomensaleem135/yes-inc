@@ -116,12 +116,24 @@ def callback():
                                    status_code=500)
 
         logger.info(f"Authorization successful for user, access token generated.")
-        return create_response(
-            message="Authorization successful! Access token generated for user",
-            data={"access_token": result["access_token"], "expires_in": result["expires_in"]},
-            status_code=200
-        )
+        logger.info("Authorization successful. Details:")
+        logger.info(f"Access Token: {result['access_token']}")
+        logger.info(f"Expires In: {result['expires_in']}")
+
+        # Add a script to close the mini window and notify the parent
+        return f"""
+            <script>
+                if (window.opener) {{
+                    window.opener.postMessage({{status: "success", message: "OAuth callback successful"}}, "*");
+                }}
+                window.close();
+            </script>
+        """
 
     except Exception as e:
         logger.error(f"Error in callback handling: {e}")
-        return create_response(message="Error during OAuth callback", data={"details": str(e)}, status_code=500)
+        return create_response(
+            message="Error during OAuth callback",
+            data={"details": str(e)},
+            status_code=500
+        )
