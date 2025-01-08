@@ -7,7 +7,7 @@ PIPEDRIVE_BASE_URL_V1 = os.getenv("PIPEDRIVE_BASE_URL_V1"),
 
 def manage_webhook(access_token: str, subscription_url: str) -> dict or None:
     """Manages Pipedrive webhooks."""
-    url = f"{PIPEDRIVE_BASE_URL_V1}/webhooks"
+    url = "https://api.pipedrive.com/v1/webhooks"
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"

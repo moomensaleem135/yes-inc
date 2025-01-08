@@ -138,10 +138,10 @@ class UserPipedriveToken(db.Model):
     __tablename__ = 'user_pipedrive_tokens'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_email = db.Column(db.String(255), nullable=False, unique=True)  # Using email as a unique identifier
+    user_email = db.Column(db.String(255), nullable=True)  # Using email as a unique identifier
     access_token = db.Column(db.Text, nullable=False)
     expiration_time = db.Column(db.Float, nullable=False)
-    creator_id = db.Column(db.Integer, nullable=True)  # New field for storing the creator_id
+    creator_id = db.Column(db.Integer, nullable=False, unique=True)  # New field for storing the creator_id
 
     def __repr__(self):
         return f'<UserPipedriveToken Email {self.user_email}>'

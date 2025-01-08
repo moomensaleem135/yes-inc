@@ -119,14 +119,14 @@ def callback():
         logger.info("Authorization successful. Details:")
         logger.info(f"Access Token: {result['access_token']}")
         logger.info(f"Expires In: {result['expires_in']}")
-
+        logger.info("hubspot authorization successful")
+        logger.info("closing the mini window")
         # Add a script to close the mini window and notify the parent
         return f"""
             <script>
                 if (window.opener) {{
-                    window.opener.postMessage({{status: "success", message: "OAuth callback successful"}}, "*");
+                    window.opener.postMessage({{status: "success", message: "hubspot-integration-completed"}}, "*");
                 }}
-                window.close();
             </script>
         """
 

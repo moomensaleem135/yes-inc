@@ -26,7 +26,15 @@ pipedrive = oauth.remote_app(
 @pipedrive_bp.route('/')
 def home():
     """Home route for Pipedrive Blueprint."""
-    return jsonify({'message': 'Welcome to the Pipedrive Blueprint!'})
+    logger.info("Pipedrive authorization successful")
+    logger.info("closing the mini window")
+    return f"""
+        <script>
+            if (window.opener) {{
+                window.opener.postMessage({{status: "success", message: "pipedrive-integration-completed"}}, "*");
+            }}
+        </script>
+    """
 
 
 @pipedrive_bp.route('/auth/pipedrive')
@@ -40,7 +48,7 @@ def authenticate():
                 access_token = user_token.access_token
                 existing_webhook = manage_webhook(
                     access_token,
-                    os.getenv("PIPEDRIVE_SUBSCRIPTION_URL")
+                    subscription_url="https://client-dashboard-444907.uc.r.appspot.com/pipedrive/webhook/lead",
                 )
                 if existing_webhook:
                     return "Webhook already exists and is active."
@@ -50,7 +58,6 @@ def authenticate():
         # callback_url = url_for('pipedrive.authorized', _external=True, email=email)
         logger.info(f"Redirecting to Pipedrive with callback URL: {callback_url}")
         return pipedrive.authorize(callback=callback_url)
-
     except Exception as e:
         logger.error(f"Error during authentication: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -60,7 +67,7 @@ def authenticate():
 def authorized():
     """Handles the response from Pipedrive after authorization."""
     try:
-        email = request.args.get('email')
+        email = request.args.get('email', None)
         response = pipedrive.authorized_response()
         if response is None or 'access_token' not in response:
             error_message = (
@@ -73,23 +80,25 @@ def authorized():
         session['pipedrive_token'] = (access_token, '')
         logger.info("Access Token saved in session.")
 
-        if email:
-            creator_id = fetch_creator_id_with_token(access_token)
-            expiration_time = time.time() + 3600
-            UserPipedriveToken.save_token(
-                user_email=email,
-                access_token=access_token,
-                expiration_time=expiration_time,
-                creator_id=creator_id
-            )
-
+        creator_id = fetch_creator_id_with_token(access_token)
+        logger.info(f"saving access token for email: {email}, and creator_id: {creator_id}")
+        expiration_time = time.time() + 3600
+        UserPipedriveToken.save_token(
+            user_email=email,
+            access_token=access_token,
+            expiration_time=expiration_time,
+            creator_id=creator_id
+        )
+        logger.info("Access token saved in database")
         existing_webhook = manage_webhook(
             access_token,
-            current_app.config.get("PIPEDRIVE_WEBHOOK_URL")
+            subscription_url="https://client-dashboard-444907.uc.r.appspot.com/pipedrive/webhook/lead"
         )
-        if existing_webhook:
-            return "Webhook already exists and is active."
-
+        # if existing_webhook:
+        #     logger.info("Webhook already exists and is active.")
+        #     # redirect(url_for('pipedrive.home'))
+        # else:
+        #     logger.info("Webhook already exists and is active.")
         return redirect(url_for('pipedrive.home'))
 
     except OAuthException as e:
